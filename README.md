@@ -1,6 +1,8 @@
 # swiftenum
 Swift-style enums with associated values for Python
 
+Swift uses `enum` types with associated values to sneak alegbraic data types into the language in a way that won't scare off people from a Java-ish (or Objective C) background.
+
 API
 ===
 
@@ -24,9 +26,9 @@ Or, for everyone's favorite:
     something = Maybe.just(2)
     nothing = Maybe.nothing()
 
-As with a normal `enum.Enum`, or a Swift `enum`, the `type` of `barcode1` is `Barcode`. However, note that `Barcode.upca` itself is _not_ a `Barcode`, it's a function that takes 4 arguments and _returns_ a `Barcode`. (Also, of course, `Barcode.none` is a function that takes 1 argument and returns a `Barcode`.) Just as with normal function calls in Python, enum constructor calls check the number of arguments, but not the types, which are only there for documentation (although a static type checker, like some future version of `mypy`, could easily do something useful with them).
+As with a normal `enum.Enum`, or a Swift `enum`, the `type` of `barcode1` is `Barcode`. However, note that `Barcode.upca` itself is _not_ a `Barcode`, it's a function that takes 4 arguments and _returns_ a `Barcode`. (Also, of course, `Maybe.nothing` is not a `Maybe`, it's a function that takes no arguments and returns a `Maybe`.) Just as with normal function calls in Python, enum constructor calls check the number of arguments, but not the types, which are only there for documentation (although a static type checker, like some future version of `mypy`, could easily do something useful with them).
 
-Note that to write recursive enums, you don't needSwift's `indirect`--but you do need to put the type in quotes (much as with [PEP 484][484] type hints). So, this Swift example:
+Note that to write recursive enums, you don't need Swift's `indirect`--but you do need to put the type in quotes (much as with [PEP 484][484] type hints). So, this Swift example:
 
     enum ArithmeticExpression {
         case Number(Int)
@@ -92,27 +94,32 @@ You could do this by extending `enum.EnumMeta` with a sub(meta)class that adds `
 
 But if you instead create a metaclass that inherits `typing.GenericMeta` as well as `enum.EnumMeta`, then a `SwiftEnum` subclass will work exactly like a `typing.Generic` subclass. At runtime, that still means nothing (`Maybe[T]` is still the same type as `Maybe`, just as `Mapping[K, T]` is the same type as `Mapping`). And it probably wouldn't do much good even in a current static type-checker like `mypy`, which won't even recognize that `Maybe[int].just` is a callable in the first place, much less that it's a constructor for `Maybe[int]` from one `int`. But if you're going to extend such a type checker to understand `SwiftEnum`, you'd almost certainly want to include generics support.
 
+ADT
+===
+
+So, how is this an ADT? `SwiftEnum` builds sum types. To build product types, we've already got `tuple`. Or, equivalently, the 0 or more associated values are a product of 0 or more types. Or, if you want names, use a `struct` (or, in Python, a `namedtuple`). (In fact, Swift allows you to name the members of the associated value directly. This works the same as providing keyword names for parameters in function definitions, forcing the caller to pass the arguments by keyword. But that isn't essential, and it's more closely tied to Swift's slightly weird function definition and calling syntax than to its `enum` feature, so I left it out.) The only thing missing is recursion, and `indirect` handles that.
+
+So, a Swift `enum` can do everything a Haskell `data` does. And a `SwiftEnum` in Python--well, it does the same things, but (almost) all at runtime. Sso you can argue about whether it's actually the same or not by just having the usual dynamic vs. static typing argument, instead of needing to think about a new argument to have.
+
+The reason `enum` doesn't just look like `data` is that--like Scala case classes (and probably like whatever C# 7 ends up adding)--it looks friendly to people coming from ObjC or Java. They already know `enum` without associated values. With associated values--well, that's just an ObjC convenience constructor or Java alternate-constructors static method, isn't it? Polymorphic ADTs look, and act, like generics in ObjC and Java (and C++ and C#). You won't even think about doing recursive types until the first time you actually need them, at which point the idea won't look scary (and you'll be able to find `indirect` in the docs pretty quickly).
+
 The Point
 =========
 
-Swift enums, like Scala case classes, appear to be a way to get algebraic data types into the language without scaring away people coming from imperative Java-style languages. People already know `enum` without associated values. And with associated values, well, that just looks like a `@classmethod` alternate constructor for the type, so now they've got sum types. And they already know record types--that's what `struct`s are. And mixing and matching `struct` and `enum` is easy; the only thing missing from full ADTs is recursion, which no one goes looking for until they realize they need it--at which point you find `indirect`, and you're done. (Whether this trickery is necessary, or whether it works, I don't know.) So, that's the point of Swift's `enum` design.
+So, what's the point of porting this feature to Python? On its own? None that I can think of. People ask for ADTs in Python, but ADTs by themselves don't do anything.
 
-The biggest question is, what's the point of porting this feature to Python? The only answer I have is: experimenting with adding new features to Python.
+The point is to experiment with adding other features that work with ADTs: pattern matching, static type checking and inference, dynamic type checking and JIT optimizing, static and dynamic overloading, typing for wire protocols and file formats (think `ctypes.Union`), etc.
 
-For example, if Python were to add pattern matching, what should it look like? Should it work on arbitrary types, with a deconstructor protocol a la Scala, or should it only work on special simple types, or should you have both (where the special simple types just automatically define their deconstructors)? Should the simple types look like Scala case classes, or Swift enums, or should they not try so hard to be familiar to OO programmers? The easiest way to tell is to actually try it with different implementations and see what they each feel like.
-
-Meanwhile, every time the idea of static type checking comes up, someone says, "what about ADTs". The PEP 484 design was intended to go beyond what you can specify with Java-style generics without having to interpret the full set of what you can do with Python types at runtime, by having type checkers with special understanding of specific decorators, metaclasses, etc. Showing how easily mypy can be extended to understand `SwiftEnum` would be a good answer to the "what about ADTs" question.
-
-And there are plenty of other features related to ADTs from other languages that you might want to experiment with adding to Python: static type checking and type inference, maybe dynamic type checking, static or dynamic overloading, typing for wire protocols and file formats (think `ctypes.Union`), etc.
+For example, PEP 484/mypy is supposed to be flexible enough to cover anything important, without having to interpret the full range of stuff you can do at runtime in Python, by special-casing specific decorators, metaclasses, etc. So, can you extend it to handle type-checking constructor calls to arbitrary types built algebraically out of `SwiftEnum`? If so, that pretty much proves that the design flexible enough.
 
 Alternatives
 ============
 
-It might have been cleaner to not use `enum.Enum` at all here. It would take more code, but we could, e.g., make `Barcode.upca` look more like an alternate constructor classmethod named `Barcode.upca` than like a closure named `<function __main__.SwiftEnum.__new__.<locals>.func>`.
+It might have been cleaner to not use `enum.Enum` at all here. It would take more code, but we could, e.g., make `Barcode.upca` look more like an alternate constructor classmethod named `Barcode.upca` than like a closure named `<function __main__.SwiftEnum.__new__.<locals>.func>`, and probably provide better error messages when you do things that make no sense, and so on.
 
 The syntax of specifying a tuple of argument types is a little weird--it looks much less like a function declaration than the Swift equivalent, and of course it's clumsy for a single argument. We could actually make it look like a function call. (Remember that we're supplying a metaclass with a custom dict. There's no reason that dict's `__getitem__` couldn't generate each new item as encountered--there are enum modules on PyPI that do this--and then return something whose `__call__` finishes setting up the enum value. This would be hacky, but it would work. Or, of course, we could just use MacroPy and process the AST.) And then the types could become annotations, and we could give the parameters names. In fact, then we _have_ to give them names, and I'm not sure we'd _want_ to. (Most familiar ADT examples use unnamed parameters and arguments in the constructors. After all, what's the name of the thing in `Just(2)`, or of each argument in `Add(Num(2), Num(3))`? In many languages, if you want named arguments, you use a `struct`-like product type instead of a plain `tuple`/separate arguments. In Swift, you can optionally name the arguments, but that works like adding keywords to function parameters: the arguments then have to be passed by keyword in calls.)
 
-It's a bit annoying that an enum value is a tuple of its associated values. It could, of course, be a completely unrelated type--but it pretty much has to be a sequence. After all, without some kind of pattern-matching syntax in Python, the only way to extract the associated values is with iterable unpacking or indexing. Of course if you added pattern-matching, you could easily make `enum` values be decomposable but _not_ iterable or indexable (whether because the matching API directly understands `enum` values, or because there's a deconstruction protocol).
+Should an enum value really be a tuple of its associated values? It pretty much has to be a sequence of some kind. After all, without some kind of pattern-matching syntax in Python, the only way to extract the associated values is with iterable unpacking or indexing. Of course if you added pattern-matching, you could easily make `enum` values be decomposable but _not_ iterable or indexable (whether because the matching API directly understands `enum` values, or because there's a deconstruction protocol). Would that be an improvement?
 
 
   [swift]: https://developer.apple.com/library/ios/documentation/Swift/Conceptual/Swift_Programming_Language/Enumerations.html
