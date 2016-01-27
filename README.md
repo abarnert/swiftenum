@@ -110,7 +110,16 @@ So, what's the point of porting this feature to Python? On its own? None that I 
 
 The point is to experiment with adding other features that work with ADTs: pattern matching, static type checking and inference, dynamic type checking and JIT optimizing, static and dynamic overloading, typing for wire protocols and file formats (think `ctypes.Union`), etc.
 
-For example, PEP 484/mypy is supposed to be flexible enough to cover anything important, without having to interpret the full range of stuff you can do at runtime in Python, by special-casing specific decorators, metaclasses, etc. So, can you extend it to handle type-checking constructor calls to arbitrary types built algebraically out of `SwiftEnum`? If so, that pretty much proves that the design flexible enough.
+For one thing, you can simulate pattern matching just for ADTs by twisting the syntax in a few different ways. For example:
+
+    barcode.upca.match(product_barcode, lambda number_system, manufacturer, product, check:
+        print(f"UPC-A: {number_system}, {manufacturer}, {product}, {check}"))
+    barcode.qrcode.match(product_barcode, lambda product_code: 
+        print(f"QT code: product_code"))
+
+You could even hack in an exhaustiveness check: `with product_barcode.switch:` sets a flag to 1, any `match` that succeeds decrements it, and when the `with` exits, if it's still 1, or negative, your code is broken.
+
+For another example: PEP 484/mypy is supposed to be flexible enough to cover anything important, without having to interpret the full range of stuff you can do at runtime in Python, by special-casing specific decorators, metaclasses, etc. So, can you extend it to handle type-checking constructor calls to arbitrary types built algebraically out of `SwiftEnum`? If so, that pretty much proves that the design flexible enough.
 
 Alternatives
 ============
